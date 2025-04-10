@@ -1,46 +1,68 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[1]:
-
-
-from sklearn.preprocessing import LabelEncoder
-import joblib
 import pandas as pd
 import streamlit as st
-from sklearn.ensemble import RandomForestClassifier
+import joblib
+from sklearn.preprocessing import LabelEncoder
 
-# Load the pre-trained model (assuming it's already saved as 'drug_model.pkl')
+# Load the pre-trained model and encoders
 model = joblib.load('drug_model.pkl')
+label_encoder_phase = joblib.load('label_encoder_phase.pkl')
+label_encoder_trial_results = joblib.load('label_encoder_trial_results.pkl')
 
-# Create and fit the LabelEncoder on the known labels
-label_encoder_phase = LabelEncoder()
-label_encoder_trial_results = LabelEncoder()
+# Page config
+st.set_page_config(
+    page_title="GENAI FDA Compliance Checker",
+    page_icon="💊",
+    layout="centered",
+    initial_sidebar_state="auto"
+)
 
-# Fit the encoder on the possible values of 'phase' and 'trial_results'
-label_encoder_phase.fit(['Preclinical', 'Phase 1', 'Phase 2', 'Phase 3'])  # Ensure all phases are included
-label_encoder_trial_results.fit(['Success', 'Failure', 'Adverse Effects'])  # Ensure all trial results are included
+# Inject some custom CSS for styling
+st.markdown("""
+    <style>
+    .main {
+        background-color: #f5f7fa;
+        padding: 2rem;
+    }
+    .stButton > button {
+        background-color: #4CAF50;
+        color: white;
+        font-weight: bold;
+    }
+    .stTextInput>div>div>input {
+        background-color: #ffffff;
+    }
+    .result-success {
+        background-color: #d4edda;
+        color: #155724;
+        padding: 1rem;
+        border-radius: 8px;
+        font-weight: bold;
+    }
+    .result-fail {
+        background-color: #f8d7da;
+        color: #721c24;
+        padding: 1rem;
+        border-radius: 8px;
+        font-weight: bold;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-# Save the fitted encoders for future use
-joblib.dump(label_encoder_phase, 'label_encoder_phase.pkl')
-joblib.dump(label_encoder_trial_results, 'label_encoder_trial_results.pkl')
+# Title and description
+st.markdown("<h1 style='text-align: center; color: #4B0082;'>💊 GENAI - FDA Drug Pipeline Compliance Checker</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center;'>Upload your drug pipeline data to check if it complies with FDA regulations using our trained AI model.</p>", unsafe_allow_html=True)
+st.markdown("---")
 
-# Streamlit interface
-st.title("GENAI - FDA Drug Pipeline Compliance Checker")
+# User Inputs
+st.subheader("📄 Enter Drug Information")
 
-st.write("""
-    Upload the new drug pipeline data, and our tool will analyze it for compliance with FDA regulations.
-    Please fill in the information for each column to receive the analysis.
-""")
+drug_name = st.text_input("🔹 Drug Name")
+phase = st.selectbox("🔹 Development Phase", ['Preclinical', 'Phase 1', 'Phase 2', 'Phase 3'])
+safety_data = st.slider("🛡️ Safety Data Score (1-10)", 1, 10, 5)
+efficacy_data = st.slider("💪 Efficacy Data Score (1-10)", 1, 10, 5)
+trial_results = st.selectbox("🔹 Trial Outcome", ['Success', 'Failure', 'Adverse Effects'])
 
-# User input for the drug pipeline
-drug_name = st.text_input("Drug Name")
-phase = st.selectbox("Phase", ['Preclinical', 'Phase 1', 'Phase 2', 'Phase 3'])
-safety_data = st.number_input("Safety Data Score (1-10)", min_value=1, max_value=10)
-efficacy_data = st.number_input("Efficacy Data Score (1-10)", min_value=1, max_value=10)
-trial_results = st.selectbox("Trial Results", ['Success', 'Failure', 'Adverse Effects'])
-
-# Prepare the input data for prediction
+# Prepare input data
 input_data = pd.DataFrame({
     'drug_name': [drug_name],
     'phase': [phase],
@@ -49,34 +71,25 @@ input_data = pd.DataFrame({
     'trial_results': [trial_results]
 })
 
-# Load the pre-trained label encoders (if they're already saved)
-label_encoder_phase = joblib.load('label_encoder_phase.pkl')
-label_encoder_trial_results = joblib.load('label_encoder_trial_results.pkl')
-
-# Handle unseen labels gracefully using a helper function
+# Helper function for safe label encoding
 def safe_transform(encoder, value):
     try:
-        # Try to transform, if value is unseen, return a default encoding
         return encoder.transform([value])[0]
     except ValueError:
-        # Handle unseen label (assign default value, e.g., -1 or any number)
-        return -1  # Or some other value you deem appropriate
+        return -1
 
-# Transform the input data with safety checks
+# Encode categorical variables
 input_data['phase'] = input_data['phase'].apply(lambda x: safe_transform(label_encoder_phase, x))
 input_data['trial_results'] = input_data['trial_results'].apply(lambda x: safe_transform(label_encoder_trial_results, x))
 
-# Predict compliance with FDA regulations
-if st.button('Check Compliance'):
-    prediction = model.predict(input_data)  # Drop 'drug_name' as it's not used in prediction
-    if prediction == 1:
-        st.success("The drug pipeline is **compliant** with FDA regulations.")
+# Check Compliance Button
+if st.button("✅ Check Compliance"):
+    prediction = model.predict(input_data)
+    
+    if prediction[0] == 1:
+        st.markdown('<div class="result-success">✅ The drug pipeline is <strong>COMPLIANT</strong> with FDA regulations.</div>', unsafe_allow_html=True)
     else:
-        st.error("The drug pipeline is **non-compliant** with FDA regulations.")
+        st.markdown('<div class="result-fail">🚫 The drug pipeline is <strong>NON-COMPLIANT</strong> with FDA regulations.</div>', unsafe_allow_html=True)
 
-
-# In[ ]:
-
-
-
-
+st.markdown("---")
+st.markdown("<small>🔬 Powered by GENAI — Accelerating drug approvals through intelligent compliance checks.</small>", unsafe_allow_html=True)
